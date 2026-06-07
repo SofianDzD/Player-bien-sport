@@ -2,118 +2,207 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>مشغّل البث</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>بث مباشر</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    font-family: Arial, sans-serif;
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    background:#000;
+    width:100%; height:100%;
+    overflow:hidden;
+    font-family:Arial,sans-serif;
+  }
+  #wrap {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#000;
   }
   video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    background: #000;
+    width:100%; height:100%;
+    object-fit:contain;
+    background:#000;
   }
+  /* ===== loading overlay ===== */
+  #loading {
+    position:fixed; inset:0;
+    background:#000;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    color:#fff; gap:14px; z-index:10;
+  }
+  .spinner {
+    width:48px; height:48px;
+    border:4px solid #333;
+    border-top-color:#4fc3f7;
+    border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #loading p { font-size:15px; opacity:.8; }
+
+  /* ===== error overlay ===== */
   #error {
-    display: none;
-    color: #fff;
-    text-align: center;
-    padding: 20px;
-    font-size: 16px;
+    display:none;
+    position:fixed; inset:0;
+    background:#0a0a0a;
+    align-items:center; justify-content:center;
+    flex-direction:column; gap:16px;
+    padding:24px; text-align:center; color:#fff; z-index:10;
   }
-  #error a {
-    color: #4fc3f7;
-    display: block;
-    margin-top: 12px;
-    font-size: 14px;
-    word-break: break-all;
+  #error .icon { font-size:48px; }
+  #error h2 { font-size:18px; }
+  #error p  { font-size:13px; color:#aaa; line-height:1.6; }
+  .btn {
+    display:inline-block;
+    background:#1e88e5; color:#fff;
+    padding:12px 24px; border-radius:8px;
+    text-decoration:none; font-size:14px;
+    margin-top:4px;
+  }
+  .btn-retry {
+    background:#333; cursor:pointer; border:none; color:#fff;
+    padding:12px 24px; border-radius:8px; font-size:14px;
   }
 </style>
 </head>
 <body>
-<video id="video" controls autoplay playsinline></video>
-<div id="error">
-  <p>⚠️ تعذّر تشغيل البث مباشرةً.</p>
-  <a id="ext-link" href="#" target="_blank">افتح في متصفح خارجي</a>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>جارٍ تحميل البث...</p>
 </div>
+
+<div id="error">
+  <div class="icon">📡</div>
+  <h2>تعذّر تشغيل البث</h2>
+  <p>
+    قد يكون البث محجوباً داخل تيليجرام بسبب قيود CORS.<br/>
+    جرّب فتح الرابط في متصفح خارجي.
+  </p>
+  <a id="ext-link" class="btn" href="#" target="_blank">🔗 فتح في المتصفح</a>
+  <button class="btn-retry" onclick="retryPlay()">🔄 إعادة المحاولة</button>
+</div>
+
+<div id="wrap">
+  <video id="video" controls playsinline webkit-playsinline></video>
+</div>
+
 <script>
-  // قراءة رابط البث من query string ?url=...
-  const params = new URLSearchParams(window.location.search);
+  const params    = new URLSearchParams(location.search);
   const streamUrl = params.get("url") ? decodeURIComponent(params.get("url")) : "";
   const subUrl    = params.get("sub")  ? decodeURIComponent(params.get("sub"))  : "";
 
   const video   = document.getElementById("video");
+  const loading = document.getElementById("loading");
   const errDiv  = document.getElementById("error");
   const extLink = document.getElementById("ext-link");
 
-  function showError() {
-    video.style.display = "none";
-    errDiv.style.display = "block";
-    if (streamUrl) {
-      extLink.href = streamUrl;
-      extLink.textContent = "🔗 افتح رابط البث مباشرةً";
-    }
+  let hlsInstance = null;
+
+  // ── Telegram WebApp setup ──────────────────────────────
+  if (window.Telegram?.WebApp) {
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+    try { tg.requestFullscreen?.(); } catch(e){}
+    // شاشة لا تنطفئ (Android)
+    try { navigator.wakeLock?.request("screen"); } catch(e){}
   }
 
-  if (!streamUrl) {
-    showError();
-  } else {
-    extLink.href = streamUrl;
+  extLink.href = streamUrl || "#";
 
-    // إضافة ترجمة إن وُجدت
-    function addSubtitle(vttUrl) {
-      if (!vttUrl) return;
-      const track = document.createElement("track");
-      track.kind    = "subtitles";
-      track.label   = "العربية";
-      track.srclang = "ar";
-      track.src     = vttUrl;
-      track.default = true;
-      video.appendChild(track);
-    }
+  function hideLoading() { loading.style.display = "none"; }
+  function showError()   {
+    hideLoading();
+    errDiv.style.display = "flex";
+  }
 
-    // تليجرام WebApp: طلب fullscreen
-    if (window.Telegram && window.Telegram.WebApp) {
-      const tg = window.Telegram.WebApp;
-      tg.ready();
-      tg.expand();
-      if (tg.requestFullscreen) tg.requestFullscreen();
-    }
+  function addSubtitle() {
+    if (!subUrl) return;
+    const t = document.createElement("track");
+    t.kind = "subtitles"; t.label = "العربية";
+    t.srclang = "ar"; t.src = subUrl; t.default = true;
+    video.appendChild(t);
+  }
+
+  function retryPlay() {
+    errDiv.style.display = "none";
+    loading.style.display = "flex";
+    startPlay();
+  }
+
+  function startPlay() {
+    if (!streamUrl) { showError(); return; }
+
+    // تنظيف أي instance سابق
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    video.src = "";
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        xhrSetup: function(xhr) {
-          xhr.setRequestHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36");
+      hlsInstance = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        xhrSetup: function(xhr, url) {
+          // بعض السيرفرات تحتاج User-Agent مناسب
+          try {
+            xhr.setRequestHeader("User-Agent",
+              "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36");
+          } catch(e) {}
         }
       });
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function() {
-        addSubtitle(subUrl);
-        video.play().catch(() => {});
+      hlsInstance.loadSource(streamUrl);
+      hlsInstance.attachMedia(video);
+
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        hideLoading();
+        addSubtitle();
+        video.play().catch(() => {
+          // بعض المتصفحات تمنع autoplay — نظهر الفيديو فقط
+          hideLoading();
+        });
       });
-      hls.on(Hls.Events.ERROR, function(event, data) {
-        if (data.fatal) showError();
+
+      hlsInstance.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          // محاولة native fallback قبل إظهار الخطأ
+          tryNative();
+        }
       });
+
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari / iOS
+      // Safari / iOS — يدعم HLS مدمجاً
       video.src = streamUrl;
-      video.addEventListener("loadedmetadata", function() {
-        addSubtitle(subUrl);
-        video.play().catch(() => {});
-      });
-      video.addEventListener("error", showError);
+      video.addEventListener("loadedmetadata", () => {
+        hideLoading();
+        addSubtitle();
+        video.play().catch(() => hideLoading());
+      }, {once: true});
+      video.addEventListener("error", tryNative, {once: true});
+
     } else {
-      showError();
+      tryNative();
     }
   }
+
+  function tryNative() {
+    // محاولة أخيرة: src مباشر
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    video.src = streamUrl;
+    video.load();
+    const onOk  = () => { hideLoading(); video.play().catch(()=>{}); };
+    const onErr = () => { showError(); };
+    video.addEventListener("canplay", onOk,  {once: true});
+    video.addEventListener("error",   onErr, {once: true});
+    // timeout 8 ثوانٍ
+    setTimeout(() => {
+      if (errDiv.style.display !== "flex" && loading.style.display !== "none") {
+        showError();
+      }
+    }, 8000);
+  }
+
+  startPlay();
 </script>
 </body>
 </html>
