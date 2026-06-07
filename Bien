@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>مشغّل البث</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+  }
+  video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    background: #000;
+  }
+  #error {
+    display: none;
+    color: #fff;
+    text-align: center;
+    padding: 20px;
+    font-size: 16px;
+  }
+  #error a {
+    color: #4fc3f7;
+    display: block;
+    margin-top: 12px;
+    font-size: 14px;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<video id="video" controls autoplay playsinline></video>
+<div id="error">
+  <p>⚠️ تعذّر تشغيل البث مباشرةً.</p>
+  <a id="ext-link" href="#" target="_blank">افتح في متصفح خارجي</a>
+</div>
+<script>
+  // قراءة رابط البث من query string ?url=...
+  const params = new URLSearchParams(window.location.search);
+  const streamUrl = params.get("url") ? decodeURIComponent(params.get("url")) : "";
+  const subUrl    = params.get("sub")  ? decodeURIComponent(params.get("sub"))  : "";
+
+  const video   = document.getElementById("video");
+  const errDiv  = document.getElementById("error");
+  const extLink = document.getElementById("ext-link");
+
+  function showError() {
+    video.style.display = "none";
+    errDiv.style.display = "block";
+    if (streamUrl) {
+      extLink.href = streamUrl;
+      extLink.textContent = "🔗 افتح رابط البث مباشرةً";
+    }
+  }
+
+  if (!streamUrl) {
+    showError();
+  } else {
+    extLink.href = streamUrl;
+
+    // إضافة ترجمة إن وُجدت
+    function addSubtitle(vttUrl) {
+      if (!vttUrl) return;
+      const track = document.createElement("track");
+      track.kind    = "subtitles";
+      track.label   = "العربية";
+      track.srclang = "ar";
+      track.src     = vttUrl;
+      track.default = true;
+      video.appendChild(track);
+    }
+
+    // تليجرام WebApp: طلب fullscreen
+    if (window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+      if (tg.requestFullscreen) tg.requestFullscreen();
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        xhrSetup: function(xhr) {
+          xhr.setRequestHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36");
+        }
+      });
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function() {
+        addSubtitle(subUrl);
+        video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, function(event, data) {
+        if (data.fatal) showError();
+      });
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari / iOS
+      video.src = streamUrl;
+      video.addEventListener("loadedmetadata", function() {
+        addSubtitle(subUrl);
+        video.play().catch(() => {});
+      });
+      video.addEventListener("error", showError);
+    } else {
+      showError();
+    }
+  }
+</script>
+</body>
+</html>
