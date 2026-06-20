@@ -3,19 +3,37 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<!--
+  هذا هو الإصلاح الأساسي لمشكلة "تعذّر تشغيل البث":
+  كثير من سيرفرات IPTV ترفض الطلبات القادمة من Origin مختلف (مثل صفحة
+  GitHub Pages هذه) لأن متصفح المستخدم يرسل تلقائياً ترويسة Referer
+  تشير إلى عنوان الصفحة الحالية، فيظن السيرفر أنها محاولة "hotlinking"
+  ويرفضها. الترويسة Referer لا يمكن للجافاسكربت تعديلها يدوياً (forbidden
+  header)، لكن يمكن إلغاؤها بالكامل عبر meta tag — هذا يجعل المتصفح لا
+  يرسل أي Referer إطلاقاً مع طلبات التحميل (manifest + segments).
+-->
+<meta name="referrer" content="no-referrer"/>
 <title>بث مباشر</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { background:#000; width:100%; height:100%; overflow:hidden; font-family:Arial,sans-serif; }
-
-  video {
+  html, body {
+    background:#000;
+    width:100%; height:100%;
+    overflow:hidden;
+    font-family:Arial,sans-serif;
+  }
+  #wrap {
     position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#000;
+  }
+  video {
     width:100%; height:100%;
     object-fit:contain;
     background:#000;
-    z-index:1;
   }
-
+  /* ===== loading overlay ===== */
   #loading {
     position:fixed; inset:0;
     background:#000;
@@ -33,6 +51,7 @@
   @keyframes spin { to { transform:rotate(360deg); } }
   #loading p { font-size:15px; opacity:.8; }
 
+  /* ===== error overlay ===== */
   #error {
     display:none;
     position:fixed; inset:0;
@@ -41,14 +60,20 @@
     flex-direction:column; gap:16px;
     padding:24px; text-align:center; color:#fff; z-index:10;
   }
-  #error .icon { font-size:52px; }
-  #error h2 { font-size:19px; }
-  #error p { font-size:13px; color:#aaa; line-height:1.7; }
-  .btn-retry {
-    background:#1e88e5; cursor:pointer; border:none; color:#fff;
-    padding:13px 32px; border-radius:10px; font-size:15px; font-family:Arial;
+  #error .icon { font-size:48px; }
+  #error h2 { font-size:18px; }
+  #error p  { font-size:13px; color:#aaa; line-height:1.6; }
+  .btn {
+    display:inline-block;
+    background:#1e88e5; color:#fff;
+    padding:12px 24px; border-radius:8px;
+    text-decoration:none; font-size:14px;
+    margin-top:4px;
   }
-  .btn-retry:active { opacity:.8; }
+  .btn-retry {
+    background:#333; cursor:pointer; border:none; color:#fff;
+    padding:12px 24px; border-radius:8px; font-size:14px;
+  }
 </style>
 </head>
 <body>
@@ -61,115 +86,148 @@
 <div id="error">
   <div class="icon">📡</div>
   <h2>تعذّر تشغيل البث</h2>
-  <p>تأكد من اتصالك بالإنترنت<br/>ثم أعد المحاولة.</p>
+  <p>
+    قد يكون البث محجوباً داخل تيليجرام بسبب قيود CORS.<br/>
+    جرّب فتح الرابط في متصفح خارجي.
+  </p>
+  <a id="ext-link" class="btn" href="#" target="_blank">🔗 فتح في المتصفح</a>
   <button class="btn-retry" onclick="retryPlay()">🔄 إعادة المحاولة</button>
 </div>
 
-<video id="video" controls playsinline webkit-playsinline
-  x-webkit-airplay="allow"
-  controlsList="nodownload">
-</video>
+<div id="wrap">
+  <video id="video" controls playsinline webkit-playsinline></video>
+</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <script>
   const params    = new URLSearchParams(location.search);
   const streamUrl = params.get("url") ? decodeURIComponent(params.get("url")) : "";
+  const subUrl    = params.get("sub")  ? decodeURIComponent(params.get("sub"))  : "";
 
   const video   = document.getElementById("video");
   const loading = document.getElementById("loading");
   const errDiv  = document.getElementById("error");
+  const extLink = document.getElementById("ext-link");
 
   let hlsInstance = null;
-  let retryCount  = 0;
 
-  // ── Telegram WebApp ──────────────────────────────────
-  const tg = window.Telegram?.WebApp;
-  if (tg) {
+  // ── Telegram WebApp setup ──────────────────────────────
+  if (window.Telegram?.WebApp) {
+    const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
-    try { tg.requestFullscreen?.(); } catch(e) {}
-    try { navigator.wakeLock?.request("screen"); } catch(e) {}
+    try { tg.requestFullscreen?.(); } catch(e){}
+    // شاشة لا تنطفئ (Android)
+    try { navigator.wakeLock?.request("screen"); } catch(e){}
   }
 
+  extLink.href = streamUrl || "#";
+
   function hideLoading() { loading.style.display = "none"; }
-  function showError()   { hideLoading(); errDiv.style.display = "flex"; }
+  function showError()   {
+    hideLoading();
+    errDiv.style.display = "flex";
+  }
+
+  function addSubtitle() {
+    if (!subUrl) return;
+    const t = document.createElement("track");
+    t.kind = "subtitles"; t.label = "العربية";
+    t.srclang = "ar"; t.src = subUrl; t.default = true;
+    video.appendChild(t);
+  }
 
   function retryPlay() {
-    retryCount = 0;
-    errDiv.style.display   = "none";
-    loading.style.display  = "flex";
+    errDiv.style.display = "none";
+    loading.style.display = "flex";
     startPlay();
   }
 
   function startPlay() {
     if (!streamUrl) { showError(); return; }
+
+    // تنظيف أي instance سابق
     if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
     video.src = "";
 
-    // ── الطريقة الأولى: native HLS (أندرويد + iOS) ──────
-    // تيليجرام WebView يدعم HLS مباشرة بدون hls.js
-    // وهذا يتجاوز مشكلة CORS لأن الطلب يذهب من WebView وليس من JS
-    if (video.canPlayType("application/vnd.apple.mpegurl") ||
-        video.canPlayType("application/x-mpegURL")) {
-      video.src = streamUrl;
-      video.load();
-      video.addEventListener("canplay", () => {
-        hideLoading();
-        video.play().catch(() => { hideLoading(); });
-      }, { once: true });
-      video.addEventListener("error", () => {
-        // إذا فشل native → جرب hls.js
-        tryHlsJs();
-      }, { once: true });
-      setTimeout(() => {
-        if (loading.style.display !== "none") tryHlsJs();
-      }, 6000);
-      return;
-    }
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        // بث مباشر (Live) — إعدادات مهيّأة لتقليل الـ buffering وتأخير البداية
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 6,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 15000,
+        levelLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+        xhrSetup: function(xhr) {
+          xhr.withCredentials = false;
+        },
+      });
+      hlsInstance.loadSource(streamUrl);
+      hlsInstance.attachMedia(video);
 
-    // ── الطريقة الثانية: hls.js ──────────────────────────
-    tryHlsJs();
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        hideLoading();
+        addSubtitle();
+        video.play().catch(() => {
+          // بعض المتصفحات تمنع autoplay — نظهر الفيديو فقط
+          hideLoading();
+        });
+      });
+
+      let retried = false;
+      hlsInstance.on(Hls.Events.ERROR, (_, data) => {
+        if (!data.fatal) return;
+        // محاولة استرجاع تلقائية واحدة قبل اعتبار الخطأ نهائياً
+        if (!retried && (data.type === Hls.ErrorTypes.NETWORK_ERROR ||
+                          data.type === Hls.ErrorTypes.MEDIA_ERROR)) {
+          retried = true;
+          try {
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              hlsInstance.startLoad();
+            } else {
+              hlsInstance.recoverMediaError();
+            }
+            return;
+          } catch (e) { /* تابع لمحاولة native */ }
+        }
+        tryNative();
+      });
+
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari / iOS — يدعم HLS مدمجاً
+      video.src = streamUrl;
+      video.addEventListener("loadedmetadata", () => {
+        hideLoading();
+        addSubtitle();
+        video.play().catch(() => hideLoading());
+      }, {once: true});
+      video.addEventListener("error", tryNative, {once: true});
+
+    } else {
+      tryNative();
+    }
   }
 
-  function tryHlsJs() {
-    if (!Hls.isSupported()) { showError(); return; }
+  function tryNative() {
+    // محاولة أخيرة: src مباشر
     if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-
-    hlsInstance = new Hls({
-      enableWorker:   false,   // WebView لا يدعم Workers دائماً
-      lowLatencyMode: true,
-      maxBufferLength: 30,
-      xhrSetup: (xhr) => {
-        try {
-          xhr.setRequestHeader("User-Agent",
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36");
-        } catch(e) {}
+    video.src = streamUrl;
+    video.load();
+    const onOk  = () => { hideLoading(); video.play().catch(()=>{}); };
+    const onErr = () => { showError(); };
+    video.addEventListener("canplay", onOk,  {once: true});
+    video.addEventListener("error",   onErr, {once: true});
+    // timeout 8 ثوانٍ
+    setTimeout(() => {
+      if (errDiv.style.display !== "flex" && loading.style.display !== "none") {
+        showError();
       }
-    });
-
-    hlsInstance.loadSource(streamUrl);
-    hlsInstance.attachMedia(video);
-
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-      hideLoading();
-      video.play().catch(() => { hideLoading(); });
-    });
-
-    hlsInstance.on(Hls.Events.ERROR, (_, data) => {
-      if (data.fatal) {
-        retryCount++;
-        if (retryCount <= 2) {
-          // إعادة المحاولة تلقائياً مرتين
-          setTimeout(() => {
-            hlsInstance?.destroy();
-            hlsInstance = null;
-            tryHlsJs();
-          }, 2000);
-        } else {
-          showError();
-        }
-      }
-    });
+    }, 8000);
   }
 
   startPlay();
