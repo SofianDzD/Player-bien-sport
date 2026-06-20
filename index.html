@@ -8,88 +8,63 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.min.js"></script>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-html,body { background:#000; width:100%; height:100%; overflow:hidden; font-family:Arial,sans-serif; }
-#wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000; }
-video { width:100%; height:100%; object-fit:contain; background:#000; }
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:#000;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+video{width:100%;height:100%;object-fit:contain;background:#000}
 
-/* ── loading ── */
-#loading {
-  position:fixed; inset:0; background:#000;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  color:#fff; gap:14px; z-index:10;
+#loading{
+  position:fixed;inset:0;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#fff;gap:14px;z-index:10;
 }
-.spinner {
-  width:48px; height:48px; border:4px solid #333;
-  border-top-color:#4fc3f7; border-radius:50%;
-  animation:spin .8s linear infinite;
-}
-@keyframes spin { to { transform:rotate(360deg); } }
-#loading-label { font-size:15px; opacity:.8; }
-#loading-step  { font-size:12px; color:#4fc3f7; opacity:.7; margin-top:-6px; }
+.spinner{width:48px;height:48px;border:4px solid #333;border-top-color:#4fc3f7;
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-label{font-size:15px;opacity:.8}
+#loading-step{font-size:12px;color:#4fc3f7;opacity:.7;margin-top:-6px}
 
-/* ── error + diagnostics ── */
-#error {
-  display:none; position:fixed; inset:0; background:#0a0a0a;
-  align-items:flex-start; justify-content:center; flex-direction:column;
-  gap:0; padding:0; color:#fff; z-index:10; overflow-y:auto;
+#error{
+  display:none;position:fixed;inset:0;background:#0a0a0a;
+  flex-direction:column;align-items:stretch;
+  color:#fff;z-index:10;overflow-y:auto;
 }
-.err-header {
-  width:100%; padding:20px 20px 12px;
-  display:flex; flex-direction:column; align-items:center; gap:8px;
-  border-bottom:1px solid #1e1e1e;
-}
-.err-header .icon { font-size:40px; }
-.err-header h2   { font-size:17px; }
-.err-header p    { font-size:12px; color:#888; text-align:center; }
+.err-header{padding:22px 20px 14px;display:flex;flex-direction:column;
+  align-items:center;gap:8px;border-bottom:1px solid #1e1e1e;text-align:center}
+.err-header .icon{font-size:38px}
+.err-header h2{font-size:17px}
+.err-header p{font-size:12px;color:#aaa;line-height:1.6}
 
-/* diagnostic table */
-.diag-box {
-  width:100%; padding:12px 16px;
-  background:#0f0f0f; border-bottom:1px solid #1a1a1a;
+/* mixed-content special banner */
+#mixed-banner{
+  display:none;margin:12px 16px 0;
+  background:#1a1200;border:1px solid #ff9800;
+  border-radius:8px;padding:12px 14px;
+  font-size:13px;color:#ffb74d;line-height:1.7;
 }
-.diag-title {
-  font-size:11px; color:#4fc3f7; text-transform:uppercase;
-  letter-spacing:.5px; margin-bottom:8px;
-}
-.diag-row {
-  display:flex; align-items:flex-start; gap:8px;
-  padding:5px 0; border-bottom:1px solid #181818;
-  font-size:12px;
-}
-.diag-row:last-child { border-bottom:none; }
-.diag-key   { color:#888; min-width:90px; flex-shrink:0; padding-top:1px; }
-.diag-val   { color:#e0e0e0; word-break:break-all; flex:1; }
-.diag-val.ok   { color:#4caf50; }
-.diag-val.err  { color:#f44336; }
-.diag-val.warn { color:#ff9800; }
-.diag-val.info { color:#4fc3f7; }
+#mixed-banner strong{color:#ffd54f;display:block;margin-bottom:4px}
 
-/* action buttons */
-.err-actions {
-  width:100%; padding:14px 16px;
-  display:flex; flex-direction:column; gap:10px;
-}
-.btn {
-  display:block; width:100%; text-align:center;
-  padding:13px 20px; border-radius:8px; font-size:14px;
-  text-decoration:none; cursor:pointer; border:none;
-}
-.btn-primary { background:#1e88e5; color:#fff; }
-.btn-secondary { background:#222; color:#fff; }
-.btn-copy { background:#333; color:#aaa; font-size:12px; padding:10px; }
+.diag-box{padding:10px 16px;background:#0f0f0f;border-bottom:1px solid #1a1a1a}
+.diag-title{font-size:10px;color:#4fc3f7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+.diag-row{display:flex;align-items:flex-start;gap:8px;padding:4px 0;
+  border-bottom:1px solid #181818;font-size:12px}
+.diag-row:last-child{border-bottom:none}
+.diag-key{color:#888;min-width:80px;flex-shrink:0;padding-top:1px}
+.diag-val{color:#e0e0e0;word-break:break-all;flex:1}
+.ok{color:#4caf50}.err{color:#f44336}.warn{color:#ff9800}.info{color:#4fc3f7}
 
-/* stream log */
-.log-box {
-  width:100%; padding:10px 16px;
-  background:#080808; border-top:1px solid #1a1a1a;
-}
-.log-title { font-size:11px; color:#666; margin-bottom:6px; }
-.log-lines { font-size:10px; color:#555; font-family:monospace; max-height:80px; overflow-y:auto; }
-.log-line.e { color:#f44336; }
-.log-line.w { color:#ff9800; }
-.log-line.i { color:#4fc3f7; }
-.log-line.s { color:#4caf50; }
+.err-actions{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.btn{display:block;width:100%;text-align:center;padding:13px 20px;
+  border-radius:8px;font-size:14px;text-decoration:none;cursor:pointer;border:none}
+.btn-ext{background:#1e88e5;color:#fff;font-size:15px;font-weight:bold}
+.btn-retry{background:#333;color:#fff}
+.btn-copy{background:#1a1a1a;color:#888;font-size:12px;padding:10px}
+
+.log-box{padding:10px 16px;background:#080808;border-top:1px solid #1a1a1a}
+.log-title{font-size:10px;color:#555;margin-bottom:5px}
+.log-lines{font-size:10px;color:#555;font-family:monospace;max-height:70px;overflow-y:auto}
+.log-line.e{color:#f44336}.log-line.w{color:#ff9800}
+.log-line.i{color:#4fc3f7}.log-line.s{color:#4caf50}
 </style>
 </head>
 <body>
@@ -107,15 +82,22 @@ video { width:100%; height:100%; object-fit:contain; background:#000; }
     <p id="err-summary">فشل تحميل البث. انظر التفاصيل أدناه.</p>
   </div>
 
-  <!-- بيانات البث -->
-  <div class="diag-box">
+  <!-- تحذير Mixed Content -->
+  <div id="mixed-banner">
+    <strong>⚠️ سبب المشكلة: HTTP داخل HTTPS (Mixed Content)</strong>
+    رابط البث يستخدم <code>http://</code> لكن المشغّل على <code>https://</code> —
+    المتصفح يحجب هذا الطلب تلقائياً لأسباب أمنية.<br>
+    ✅ <strong>الحل:</strong> جرّبنا الترقية إلى HTTPS تلقائياً — إن فشلت افتح الرابط في المتصفح الخارجي.
+  </div>
+
+  <div class="diag-box" style="margin-top:8px">
     <div class="diag-title">🔗 معلومات البث</div>
     <div class="diag-row">
       <span class="diag-key">الرابط</span>
       <span class="diag-val info" id="d-url">—</span>
     </div>
     <div class="diag-row">
-      <span class="diag-key">النوع المُكتشف</span>
+      <span class="diag-key">النوع</span>
       <span class="diag-val" id="d-type">—</span>
     </div>
     <div class="diag-row">
@@ -124,7 +106,6 @@ video { width:100%; height:100%; object-fit:contain; background:#000; }
     </div>
   </div>
 
-  <!-- تشخيص الخطأ -->
   <div class="diag-box">
     <div class="diag-title">❌ تشخيص الخطأ</div>
     <div class="diag-row">
@@ -136,35 +117,32 @@ video { width:100%; height:100%; object-fit:contain; background:#000; }
       <span class="diag-val err" id="d-errdetail">—</span>
     </div>
     <div class="diag-row">
+      <span class="diag-key">بروتوكول</span>
+      <span class="diag-val" id="d-proto">—</span>
+    </div>
+    <div class="diag-row">
       <span class="diag-key">رمز HTTP</span>
-      <span class="diag-val" id="d-http">جارٍ الفحص...</span>
+      <span class="diag-val" id="d-http">—</span>
     </div>
     <div class="diag-row">
-      <span class="diag-key">CORS</span>
-      <span class="diag-val" id="d-cors">جارٍ الفحص...</span>
-    </div>
-    <div class="diag-row">
-      <span class="diag-key">شبكة تيليجرام</span>
-      <span class="diag-val" id="d-net">جارٍ الفحص...</span>
+      <span class="diag-key">شبكة</span>
+      <span class="diag-val" id="d-net">—</span>
     </div>
   </div>
 
-  <!-- توصية الإصلاح -->
   <div class="diag-box" id="fix-box" style="display:none">
-    <div class="diag-title">🛠 سبب المشكلة والحل</div>
+    <div class="diag-title">🛠 سبب المشكلة والحل المقترح</div>
     <div class="diag-row">
       <span class="diag-val warn" id="d-fix">—</span>
     </div>
   </div>
 
-  <!-- الأزرار -->
   <div class="err-actions">
-    <button class="btn btn-primary" onclick="retryPlay()">🔄 إعادة المحاولة</button>
-    <a id="ext-link" class="btn btn-secondary" href="#" target="_blank">🔗 فتح في المتصفح الخارجي</a>
-    <button class="btn btn-copy" onclick="copyUrl()">📋 نسخ رابط البث للتشخيص</button>
+    <a id="ext-link" class="btn btn-ext" href="#" target="_blank">🔗 فتح في المتصفح الخارجي</a>
+    <button class="btn btn-retry" onclick="retryPlay()">🔄 إعادة المحاولة (https)</button>
+    <button class="btn btn-copy" onclick="copyDiag()">📋 نسخ تقرير التشخيص</button>
   </div>
 
-  <!-- سجل الأحداث -->
   <div class="log-box">
     <div class="log-title">سجل الأحداث:</div>
     <div class="log-lines" id="log-lines"></div>
@@ -176,53 +154,29 @@ video { width:100%; height:100%; object-fit:contain; background:#000; }
 </div>
 
 <script>
-const params    = new URLSearchParams(location.search);
-const streamUrl = params.get("url") ? decodeURIComponent(params.get("url")) : "";
-const subUrl    = params.get("sub")  ? decodeURIComponent(params.get("sub"))  : "";
+const params     = new URLSearchParams(location.search);
+const rawUrl     = params.get("url") ? decodeURIComponent(params.get("url")) : "";
+const subUrl     = params.get("sub")  ? decodeURIComponent(params.get("sub"))  : "";
+
+// ── ترقية تلقائية http → https ─────────────────────────────
+// WebView يحجب HTTP من داخل HTTPS (Mixed Content).
+// نحوّل الرابط لـ HTTPS أولاً — إن فشل نعرض زر المتصفح الخارجي.
+const isMixedContent = rawUrl.startsWith("http://");
+const streamUrl      = isMixedContent ? "https://" + rawUrl.slice(7) : rawUrl;
 
 const video     = document.getElementById("video");
 const loading   = document.getElementById("loading");
 const errDiv    = document.getElementById("error");
 const extLink   = document.getElementById("ext-link");
 
+extLink.href = rawUrl || "#";   // الخارجي يفتح الرابط الأصلي (http)
+
 let hlsInstance    = null;
 let mpegtsInstance = null;
-
-// حالة التشخيص
-const diag = {
-  url:       streamUrl,
-  type:      "",
-  lib:       "",
-  errType:   "",
-  errDetail: "",
-  http:      "—",
-  cors:      "—",
-  net:       "—",
-  fix:       "",
-};
 const logs = [];
+const diag = { type:"", lib:"", errType:"", errDetail:"", fix:"" };
 
-function log(msg, level="i") {
-  const t = new Date().toLocaleTimeString("ar", {hour12:false});
-  logs.push({t, msg, level});
-  const el = document.getElementById("log-lines");
-  if (el) {
-    const d = document.createElement("div");
-    d.className = "log-line " + level;
-    d.textContent = `[${t}] ${msg}`;
-    el.appendChild(d);
-    el.scrollTop = el.scrollHeight;
-  }
-  console.log(`[${level.toUpperCase()}] ${msg}`);
-}
-
-function setStep(txt) {
-  const el = document.getElementById("loading-step");
-  if (el) el.textContent = txt;
-  log(txt);
-}
-
-// ── Telegram WebApp ──────────────────────────────────────────
+// ── Telegram WebApp ─────────────────────────────────────────
 if (window.Telegram?.WebApp) {
   const tg = window.Telegram.WebApp;
   tg.ready(); tg.expand();
@@ -230,313 +184,259 @@ if (window.Telegram?.WebApp) {
   try { navigator.wakeLock?.request("screen"); } catch(e){}
 }
 
-extLink.href = streamUrl || "#";
-
-// ── نسخ الرابط ──────────────────────────────────────────────
-function copyUrl() {
-  if (!streamUrl) return;
-  navigator.clipboard?.writeText(streamUrl).then(() => {
-    alert("✅ تم نسخ الرابط:\n" + streamUrl);
-  }).catch(() => {
-    prompt("انسخ الرابط يدوياً:", streamUrl);
-  });
+function log(msg, lvl="i") {
+  const t = new Date().toLocaleTimeString("ar",{hour12:false});
+  logs.push({t,msg,lvl});
+  const el = document.getElementById("log-lines");
+  if (el) {
+    const d = document.createElement("div");
+    d.className = "log-line " + lvl;
+    d.textContent = `[${t}] ${msg}`;
+    el.appendChild(d); el.scrollTop = el.scrollHeight;
+  }
+}
+function setStep(txt) {
+  const el = document.getElementById("loading-step");
+  if (el) el.textContent = txt;
+  log(txt);
 }
 
-// ── تحديث واجهة التشخيص ─────────────────────────────────────
+function cls(val, okStr, warnStr) {
+  if (!val || val==="—") return "diag-val";
+  if (val.includes(okStr))   return "diag-val ok";
+  if (val.includes(warnStr)) return "diag-val warn";
+  return "diag-val err";
+}
+
 function updateDiagUI() {
   const $ = id => document.getElementById(id);
-  $("d-url").textContent     = diag.url ? diag.url.substring(0,70) + (diag.url.length>70?"…":"") : "لا يوجد رابط!";
+  const proto   = isMixedContent ? "⚠️ HTTP→HTTPS (تمت الترقية التلقائية)" : "✅ HTTPS";
+  const protoEl = $("d-proto");
+  protoEl.textContent = proto;
+  protoEl.className   = "diag-val " + (isMixedContent ? "warn" : "ok");
+
+  $("d-url").textContent     = (streamUrl||rawUrl).substring(0,65) + ((streamUrl||rawUrl).length>65?"…":"");
   $("d-type").textContent    = diag.type    || "—";
   $("d-lib").textContent     = diag.lib     || "—";
   $("d-errtype").textContent = diag.errType || "—";
   $("d-errdetail").textContent = diag.errDetail || "—";
 
-  const httpEl = $("d-http");
-  httpEl.textContent = diag.http;
-  httpEl.className   = "diag-val " +
-    (diag.http.startsWith("2") ? "ok" : diag.http === "—" ? "" : "err");
-
-  const corsEl = $("d-cors");
-  corsEl.textContent = diag.cors;
-  corsEl.className   = "diag-val " + (diag.cors==="مسموح ✅" ? "ok" : diag.cors==="—"||diag.cors.startsWith("جارٍ") ? "info" : "err");
-
-  const netEl = $("d-net");
-  netEl.textContent = diag.net;
-  netEl.className   = "diag-val " + (diag.net.startsWith("✅") ? "ok" : diag.net==="—" ? "" : "err");
-
   if (diag.fix) {
     $("fix-box").style.display = "block";
     $("d-fix").textContent = diag.fix;
   }
+  const sum = $("err-summary");
+  if (diag.errType) sum.textContent = diag.errType + (diag.errDetail?" — "+diag.errDetail:"");
 
-  // ملخص
-  const summary = document.getElementById("err-summary");
-  if (diag.errType) summary.textContent = diag.errType + (diag.errDetail ? ` — ${diag.errDetail}` : "");
+  // Mixed Content Banner
+  if (isMixedContent) $("mixed-banner").style.display = "block";
 }
 
-// ── فحص الشبكة والـ CORS بشكل متوازٍ ─────────────────────────
-async function runDiagnostics() {
-  if (!streamUrl) {
-    diag.errType = "لا يوجد رابط بث"; diag.fix = "لم يتم تمرير رابط ?url= للمشغّل.";
-    updateDiagUI(); return;
-  }
+async function runNetDiag() {
+  const $ = id => document.getElementById(id);
+  // شبكة عامة
+  fetch("https://dns.google/resolve?name=a.com&type=A",{mode:"cors"})
+    .then(()=>{ $("d-net").textContent="✅ تيليجرام متصل"; $("d-net").className="diag-val ok"; })
+    .catch(()=>{ $("d-net").textContent="❌ لا يوجد اتصال"; $("d-net").className="diag-val err"; });
 
-  // فحص 1: اتصال عام بالإنترنت
-  fetch("https://dns.google/resolve?name=example.com&type=A", {mode:"cors"})
-    .then(() => { diag.net = "✅ تيليجرام متصل"; updateDiagUI(); })
-    .catch(() => { diag.net = "❌ لا يوجد اتصال بالإنترنت داخل تيليجرام"; updateDiagUI(); });
-
-  // فحص 2: HEAD request → نعرف كود HTTP والـ CORS
+  // HEAD request على الرابط المُرقَّى
   try {
     const r = await fetch(streamUrl, {method:"HEAD", mode:"cors", cache:"no-store"});
-    diag.http = `${r.status} ${r.statusText}`;
-    diag.cors = "مسموح ✅";
-    if (r.status === 403) {
-      diag.fix = "السيرفر يرفض الطلب (403 Forbidden). الرابط محمي أو انتهت صلاحيته. جرّب تحديث القنوات من البوت.";
-    } else if (r.status === 404) {
-      diag.fix = "الرابط غير موجود (404). القناة متوقفة أو تغيّر رابطها.";
-    } else if (r.status === 401) {
-      diag.fix = "الرابط يحتاج تسجيل دخول (401). تحقق من بيانات الاشتراك.";
-    } else if (r.status >= 500) {
-      diag.fix = "خطأ في سيرفر البث (" + r.status + "). المشكلة من جهة مزوّد البث.";
-    }
-    log(`HTTP HEAD → ${r.status} ${r.statusText}`, r.ok ? "s" : "e");
-  } catch (fetchErr) {
-    const msg = fetchErr.message || "";
-    if (msg.toLowerCase().includes("cors") || msg.toLowerCase().includes("cross")) {
-      diag.cors = "❌ محجوب (CORS Error)";
-      diag.http = "مرفوض بسبب CORS";
-      diag.fix = "السيرفر لا يسمح بتحميل البث من GitHub Pages بسبب CORS. "
-               + "المشغّل يحاول بأساليب بديلة ولكن قد لا تنجح داخل تيليجرام. "
-               + "الحل: افتح الرابط في المتصفح الخارجي.";
-      log("CORS blocked: " + msg, "e");
-    } else if (msg.includes("Failed to fetch") || msg.includes("Network")) {
-      diag.cors = "⚠️ غير محدد (طلب مُنع)";
-      diag.http = "Network Error";
-      diag.fix = "الشبكة داخل تيليجرام منعت الطلب. قد يكون الرابط محجوباً أو انتهت صلاحيته.";
-      log("Network error: " + msg, "e");
+    $("d-http").textContent = `${r.status} ${r.statusText}`;
+    $("d-http").className   = "diag-val " + (r.ok?"ok":"err");
+    log(`HEAD ${streamUrl.substring(0,50)} → ${r.status}`, r.ok?"s":"e");
+    if (r.status===403) diag.fix = "السيرفر رفض الطلب (403). الرابط محمي أو انتهت صلاحيته. جدّد القنوات من البوت.";
+    if (r.status===404) diag.fix = "القناة غير موجودة (404). توقفت أو تغيّر رابطها.";
+    if (r.status>=500)  diag.fix = "خطأ في سيرفر البث (" + r.status + "). المشكلة من المزوّد.";
+    updateDiagUI();
+  } catch(e) {
+    const msg = e.message||"";
+    $("d-http").textContent = "Network Error";
+    $("d-http").className   = "diag-val err";
+    log("HEAD failed: " + msg, "e");
+    if (isMixedContent) {
+      diag.fix = "الرابط الأصلي HTTP محجوب داخل تيليجرام. الترقية إلى HTTPS فشلت أيضاً. "
+               + "الحل الوحيد: افتح الرابط في المتصفح الخارجي (زر أزرق أعلاه).";
     } else {
-      diag.cors = "⚠️ " + msg.substring(0,40);
-      diag.http = "Error";
-      log("fetch error: " + msg, "w");
+      diag.fix = "الرابط محجوب أو السيرفر لا يستجيب. جرّب الفتح في المتصفح الخارجي.";
     }
+    updateDiagUI();
   }
-  updateDiagUI();
 }
 
-// ── إخفاء / إظهار ────────────────────────────────────────────
 function hideLoading() { loading.style.display = "none"; }
 function showError() {
   hideLoading();
-  diag.errType = diag.errType || "فشل تحميل البث";
   updateDiagUI();
-  runDiagnostics();
+  runNetDiag();
   errDiv.style.display = "flex";
 }
 
 function addSubtitle() {
   if (!subUrl) return;
   const t = document.createElement("track");
-  t.kind = "subtitles"; t.label = "العربية";
-  t.srclang = "ar"; t.src = subUrl; t.default = true;
+  t.kind="subtitles"; t.label="العربية"; t.srclang="ar"; t.src=subUrl; t.default=true;
   video.appendChild(t);
-  log("subtitle track added", "i");
 }
-
 function destroyAll() {
-  if (hlsInstance)    { try { hlsInstance.destroy();    } catch(e){} hlsInstance    = null; }
-  if (mpegtsInstance) { try { mpegtsInstance.destroy(); } catch(e){} mpegtsInstance = null; }
+  if (hlsInstance)    { try{hlsInstance.destroy();}    catch(e){} hlsInstance=null; }
+  if (mpegtsInstance) { try{mpegtsInstance.destroy();} catch(e){} mpegtsInstance=null; }
   video.removeAttribute("src"); video.load();
 }
-
 function retryPlay() {
-  errDiv.style.display = "none";
-  loading.style.display = "flex";
-  document.getElementById("log-lines").innerHTML = "";
-  diag.errType = ""; diag.errDetail = ""; diag.fix = "";
+  errDiv.style.display="none";
+  loading.style.display="flex";
+  document.getElementById("log-lines").innerHTML="";
+  diag.errType=""; diag.errDetail=""; diag.fix="";
   startPlay();
 }
+function copyDiag() {
+  const txt = [
+    "=== تقرير تشخيص البث ===",
+    "الرابط الأصلي: " + rawUrl,
+    "الرابط المُستخدم: " + streamUrl,
+    "Mixed Content: " + (isMixedContent?"نعم":"لا"),
+    "النوع: " + diag.type,
+    "المكتبة: " + diag.lib,
+    "الخطأ: " + diag.errType,
+    "التفاصيل: " + diag.errDetail,
+    "الحل: " + diag.fix,
+    "--- سجل الأحداث ---",
+    ...logs.map(l => `[${l.t}] ${l.msg}`),
+  ].join("\n");
+  navigator.clipboard?.writeText(txt).then(()=>alert("✅ تم نسخ التقرير")).catch(()=>prompt("",txt));
+}
 
-// ── كشف نوع البث ─────────────────────────────────────────────
-function detectStreamType(url) {
-  const clean = url.split("?")[0].toLowerCase();
-  if (clean.endsWith(".m3u8") || clean.includes(".m3u8")) return "hls";
-  if (clean.endsWith(".ts")   || clean.includes(".ts"))   return "mpegts";
-  if (clean.endsWith(".mp4")  || clean.endsWith(".mkv"))  return "mp4";
+function detectType(url) {
+  const c = url.split("?")[0].toLowerCase();
+  if (c.endsWith(".m3u8")||c.includes(".m3u8")) return "hls";
+  if (c.endsWith(".ts")  ||c.includes(".ts"))   return "mpegts";
+  if (c.endsWith(".mp4") ||c.endsWith(".mkv"))  return "mp4";
   return "hls";
 }
 
-// ── بدء التشغيل ──────────────────────────────────────────────
 function startPlay() {
-  if (!streamUrl) {
-    diag.errType = "لا يوجد رابط"; diag.fix = "لم يُمرَّر رابط ?url= للمشغّل.";
-    showError(); return;
-  }
-  destroyAll();
-  const type = detectStreamType(streamUrl);
-  diag.type  = type.toUpperCase();
-  log("stream type: " + type, "i");
-  setStep("جارٍ الاتصال بالسيرفر...");
+  if (!rawUrl) { diag.errType="لا يوجد رابط"; diag.fix="لم يُمرَّر ?url= للمشغّل."; showError(); return; }
 
-  if (type === "mpegts") {
-    diag.lib = "mpegts.js";
-    playMpegts();
-  } else if (type === "mp4") {
-    diag.lib = "Native HTML5";
-    playNative();
-  } else {
-    diag.lib = "hls.js";
-    playHls();
+  // كشف Mixed Content مبكر — نعرض تحذيراً فورياً لكن نكمل المحاولة بـ HTTPS
+  if (isMixedContent) {
+    log("⚠️ Mixed Content: HTTP→HTTPS auto-upgrade", "w");
+    setStep("⚠️ الرابط HTTP — جارٍ الترقية إلى HTTPS...");
   }
+
+  destroyAll();
+  const type = detectType(streamUrl);
+  diag.type  = type.toUpperCase();
+  log("type=" + type + " url=" + streamUrl.substring(0,50), "i");
+
+  if (type==="mpegts") { diag.lib="mpegts.js"; playMpegts(); }
+  else if (type==="mp4"){ diag.lib="Native";   playNative(); }
+  else                  { diag.lib="hls.js";   playHls();    }
 }
 
-// ── MPEG-TS ───────────────────────────────────────────────────
 function playMpegts() {
-  if (typeof mpegts === "undefined" || !mpegts.isSupported()) {
-    log("mpegts.js not supported, fallback to hls", "w");
-    diag.lib = "hls.js (fallback)";
-    playHls(); return;
+  if (typeof mpegts==="undefined"||!mpegts.isSupported()) {
+    diag.lib="hls.js (fallback)"; playHls(); return;
   }
   setStep("تهيئة مشغّل MPEG-TS...");
   mpegtsInstance = mpegts.createPlayer(
-    { type:"mse", isLive:true, url:streamUrl },
-    { enableWorker:true, liveBufferLatencyChasing:true,
-      liveBufferLatencyMaxLatency:3.0, liveBufferLatencyMinRemain:0.5 }
+    {type:"mse", isLive:true, url:streamUrl},
+    {enableWorker:true, liveBufferLatencyChasing:true,
+     liveBufferLatencyMaxLatency:3.0, liveBufferLatencyMinRemain:0.5}
   );
   mpegtsInstance.attachMediaElement(video);
-  let started = false;
-  mpegtsInstance.on(mpegts.Events.MEDIA_INFO, info => {
-    if (started) return;
-    started = true;
-    log("MEDIA_INFO: " + JSON.stringify(info).substring(0,80), "s");
-    setStep("البث جاهز...");
-    hideLoading(); addSubtitle();
-    video.play().catch(() => hideLoading());
+  let started=false, retried=false;
+  mpegtsInstance.on(mpegts.Events.MEDIA_INFO, ()=>{
+    if(started)return; started=true;
+    log("MEDIA_INFO ✓","s"); hideLoading(); addSubtitle();
+    video.play().catch(()=>hideLoading());
   });
-  let retried = false;
-  mpegtsInstance.on(mpegts.Events.ERROR, (type, detail) => {
-    log(`mpegts error type=${type} detail=${JSON.stringify(detail).substring(0,60)}`, "e");
-    diag.errType   = "mpegts Error";
-    diag.errDetail = `${type}: ${typeof detail === "object" ? detail.msg || JSON.stringify(detail).substring(0,50) : detail}`;
-    if (!retried) {
-      retried = true;
-      try { destroyAll(); diag.lib = "hls.js (retry)"; playHls(); return; } catch(e){}
-    }
+  mpegtsInstance.on(mpegts.Events.ERROR, (t,d)=>{
+    log(`mpegts err ${t} ${JSON.stringify(d).substring(0,50)}`,"e");
+    diag.errType="mpegts Error"; diag.errDetail=`${t}: ${d?.msg||""}`;
+    if(!retried){retried=true;try{destroyAll();diag.lib="hls.js (retry)";playHls();return;}catch(e){}}
     showError();
   });
-  try { mpegtsInstance.load(); mpegtsInstance.play(); }
-  catch(e) { diag.errType = "mpegts load failed"; diag.errDetail = e.message; showError(); }
-  setTimeout(() => { if (!started && loading.style.display !== "none") {
-    diag.errType = "انتهت مهلة التحميل (timeout 15s)";
-    diag.errDetail = "لم يُرسل السيرفر MEDIA_INFO خلال 15 ثانية";
-    diag.fix = "السيرفر لا يستجيب أو البث متوقف. جرّب قناة أخرى أو انتظر قليلاً.";
+  try{ mpegtsInstance.load(); mpegtsInstance.play(); } catch(e){ diag.errType="mpegts load"; diag.errDetail=e.message; showError(); }
+  setTimeout(()=>{ if(!started&&loading.style.display!=="none"){
+    diag.errType="Timeout (15s)"; diag.errDetail="لم يُرسل السيرفر MEDIA_INFO";
+    diag.fix= isMixedContent
+      ? "الرابط HTTP محجوب داخل تيليجرام حتى بعد الترقية إلى HTTPS. افتح في المتصفح الخارجي."
+      : "السيرفر لا يستجيب أو القناة متوقفة.";
     showError();
-  }}, 15000);
+  }},15000);
 }
 
-// ── HLS ───────────────────────────────────────────────────────
 function playHls() {
   setStep("تهيئة مشغّل HLS...");
   if (Hls.isSupported()) {
     hlsInstance = new Hls({
       enableWorker:true, lowLatencyMode:true,
       liveSyncDurationCount:3, liveMaxLatencyDurationCount:6,
-      manifestLoadingTimeOut:12000, manifestLoadingMaxRetry:3,
-      manifestLoadingRetryDelay:1000,
-      levelLoadingTimeOut:12000, levelLoadingMaxRetry:3,
-      fragLoadingTimeOut:20000, fragLoadingMaxRetry:4,
-      xhrSetup: xhr => { xhr.withCredentials = false; },
+      manifestLoadingTimeOut:12000, manifestLoadingMaxRetry:2,
+      manifestLoadingRetryDelay:1500,
+      levelLoadingTimeOut:12000, levelLoadingMaxRetry:2,
+      fragLoadingTimeOut:20000, fragLoadingMaxRetry:3,
+      xhrSetup: xhr=>{ xhr.withCredentials=false; },
     });
     hlsInstance.loadSource(streamUrl);
     hlsInstance.attachMedia(video);
-    setStep("جارٍ تحميل قائمة البث (manifest)...");
-
-    hlsInstance.on(Hls.Events.MANIFEST_PARSED, (e, data) => {
-      log(`manifest OK — ${data.levels?.length||0} levels`, "s");
-      setStep("البث جاهز...");
-      hideLoading(); addSubtitle();
-      video.play().catch(() => hideLoading());
+    hlsInstance.on(Hls.Events.MANIFEST_LOADING, ()=>setStep("جارٍ تحميل قائمة البث (manifest)..."));
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED,  ()=>{
+      log("manifest parsed ✓","s"); setStep("البث جاهز...");
+      hideLoading(); addSubtitle(); video.play().catch(()=>hideLoading());
     });
-
-    hlsInstance.on(Hls.Events.MANIFEST_LOADING, () => setStep("جارٍ تحميل قائمة البث..."));
-    hlsInstance.on(Hls.Events.LEVEL_LOADING,    () => setStep("جارٍ تحميل جودة البث..."));
-    hlsInstance.on(Hls.Events.FRAG_LOADING,     () => setStep("جارٍ تحميل مقاطع البث..."));
-
-    let retried = false;
-    hlsInstance.on(Hls.Events.ERROR, (_, data) => {
-      const fatal = data.fatal;
-      log(`hls error fatal=${fatal} type=${data.type} detail=${data.details}`, fatal?"e":"w");
-      if (!fatal) return;
-
-      // تحديث التشخيص
-      diag.errType   = data.type   || "HLS Error";
-      diag.errDetail = data.details || "";
-      if (data.type === "networkError") {
-        diag.fix = "خطأ شبكة أثناء تحميل البث. الأسباب المحتملة: الرابط منتهي الصلاحية، أو السيرفر محجوب، أو CORS.";
-      } else if (data.type === "mediaError") {
-        diag.fix = "خطأ في فك ترميز الفيديو. قد يكون تنسيق البث غير مدعوم في هذا المتصفح.";
+    let retried=false;
+    hlsInstance.on(Hls.Events.ERROR, (_,d)=>{
+      log(`hls fatal=${d.fatal} type=${d.type} detail=${d.details}`,"e");
+      if(!d.fatal) return;
+      diag.errType=d.type||"HLS Error"; diag.errDetail=d.details||"";
+      if(d.type==="networkError") {
+        diag.fix = isMixedContent
+          ? "رابط HTTP محجوب بالكامل داخل تيليجرام (Mixed Content). افتح في المتصفح الخارجي."
+          : "خطأ شبكة: الرابط محجوب أو انتهت صلاحيته.";
+        if(!retried){ retried=true; try{hlsInstance.startLoad();return;}catch(e){} }
+      } else if(d.type==="mediaError") {
+        diag.fix="تنسيق البث غير مدعوم في هذا المتصفح.";
+        if(!retried){ retried=true; try{hlsInstance.recoverMediaError();return;}catch(e){} }
       }
-
-      if (!retried) {
-        retried = true;
-        if (data.type === "networkError") {
-          log("trying startLoad recovery...", "w");
-          try { hlsInstance.startLoad(); return; } catch(e){}
-        } else if (data.type === "mediaError") {
-          log("trying recoverMediaError...", "w");
-          try { hlsInstance.recoverMediaError(); return; } catch(e){}
-        }
-      }
-      // محاولة native كحل أخير
-      log("hls.js failed, trying native src...", "w");
-      diag.lib = "Native HTML5 (last resort)";
-      playNative();
+      diag.lib="Native (last resort)"; playNative();
     });
-
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-    // Safari / iOS
-    diag.lib = "Native HLS (Safari)";
-    log("using native HLS (Safari)", "i");
-    video.src = streamUrl;
-    video.addEventListener("loadedmetadata", () => {
-      hideLoading(); addSubtitle(); video.play().catch(() => hideLoading());
-    }, {once:true});
-    video.addEventListener("error", e => {
-      diag.errType = "Native HLS Error"; diag.errDetail = e.message || "";
-      showError();
-    }, {once:true});
+    diag.lib="Native HLS (Safari)";
+    video.src=streamUrl;
+    video.addEventListener("loadedmetadata",()=>{ hideLoading(); addSubtitle(); video.play().catch(()=>{}); },{once:true});
+    video.addEventListener("error",()=>{ diag.errType="Native HLS Error"; showError(); },{once:true});
   } else {
-    log("hls.js not supported, native fallback", "w");
     playNative();
   }
 }
 
-// ── Native fallback ───────────────────────────────────────────
 function playNative() {
   setStep("محاولة تشغيل مباشر...");
   destroyAll();
-  video.src = streamUrl; video.load();
-  video.addEventListener("canplay", () => {
-    log("native canplay ✓", "s");
-    hideLoading(); video.play().catch(()=>{});
-  }, {once:true});
-  video.addEventListener("error", e => {
-    const codes = {1:"ABORTED",2:"NETWORK",3:"DECODE",4:"SRC_NOT_SUPPORTED"};
-    const code  = video.error?.code;
-    log("native error: code=" + code + " " + (codes[code]||""), "e");
-    diag.errType   = "Native Error: " + (codes[code] || code);
-    diag.errDetail = video.error?.message || "";
-    if (code === 4) diag.fix = "التنسيق غير مدعوم في متصفح تيليجرام. جرّب فتح الرابط في متصفح خارجي.";
-    if (code === 2) diag.fix = "خطأ شبكة. الرابط لا يُحمَّل. تحقق من صلاحيته أو CORS.";
+  video.src=streamUrl; video.load();
+  video.addEventListener("canplay",()=>{ log("native OK","s"); hideLoading(); video.play().catch(()=>{}); },{once:true});
+  video.addEventListener("error",()=>{
+    const codes={1:"ABORTED",2:"NETWORK",3:"DECODE",4:"NOT_SUPPORTED"};
+    const code=video.error?.code;
+    diag.errType="Native Error: "+(codes[code]||code);
+    diag.errDetail=video.error?.message||"";
+    if(code===4) diag.fix="التنسيق غير مدعوم. افتح في المتصفح الخارجي.";
+    if(code===2) {
+      diag.fix = isMixedContent
+        ? "الرابط HTTP محجوب تماماً داخل تيليجرام. الحل الوحيد: المتصفح الخارجي."
+        : "خطأ شبكة عند التحميل. الرابط منتهي أو السيرفر محجوب.";
+    }
     showError();
-  }, {once:true});
-  setTimeout(() => {
-    if (errDiv.style.display !== "flex" && loading.style.display !== "none") {
-      diag.errType = "Timeout — لا استجابة من السيرفر";
-      diag.fix = "السيرفر لا يستجيب. الرابط منتهي الصلاحية أو القناة متوقفة.";
+  },{once:true});
+  setTimeout(()=>{
+    if(errDiv.style.display!=="flex"&&loading.style.display!=="none"){
+      diag.errType="Timeout";
+      diag.fix=isMixedContent?"الرابط HTTP محجوب. افتح في المتصفح الخارجي.":"السيرفر لا يستجيب.";
       showError();
     }
-  }, 10000);
+  },10000);
 }
 
 startPlay();
