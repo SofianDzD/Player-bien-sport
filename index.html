@@ -15,6 +15,7 @@
 <meta name="referrer" content="no-referrer"/>
 <title>بث مباشر</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body {
@@ -87,8 +88,8 @@
   <div class="icon">📡</div>
   <h2>تعذّر تشغيل البث</h2>
   <p>
-    قد يكون البث محجوباً داخل تيليجرام بسبب قيود CORS.<br/>
-    جرّب فتح الرابط في متصفح خارجي.
+    قد يكون البث غير متاح حالياً أو محجوباً داخل تيليجرام.<br/>
+    جرّب إعادة المحاولة، أو افتح الرابط في متصفح خارجي.
   </p>
   <a id="ext-link" class="btn" href="#" target="_blank">🔗 فتح في المتصفح</a>
   <button class="btn-retry" onclick="retryPlay()">🔄 إعادة المحاولة</button>
@@ -108,7 +109,8 @@
   const errDiv  = document.getElementById("error");
   const extLink = document.getElementById("ext-link");
 
-  let hlsInstance = null;
+  let hlsInstance    = null;
+  let mpegtsInstance = null;
 
   // ── Telegram WebApp setup ──────────────────────────────
   if (window.Telegram?.WebApp) {
@@ -136,19 +138,98 @@
     video.appendChild(t);
   }
 
+  function destroyAll() {
+    if (hlsInstance)    { try { hlsInstance.destroy(); }    catch(e){} hlsInstance = null; }
+    if (mpegtsInstance) { try { mpegtsInstance.destroy(); } catch(e){} mpegtsInstance = null; }
+    video.removeAttribute("src");
+    video.load();
+  }
+
   function retryPlay() {
     errDiv.style.display = "none";
     loading.style.display = "flex";
     startPlay();
   }
 
+  /**
+   * يحدد نوع البث من الرابط:
+   * - .m3u8 / m3u8 في الرابط → HLS (hls.js)
+   * - .ts أو أي امتداد آخر (شائع في بثوث IPTV الخام MPEG-TS) → mpegts.js
+   */
+  function detectStreamType(url) {
+    const clean = url.split("?")[0].toLowerCase();
+    if (clean.endsWith(".m3u8") || clean.includes(".m3u8")) return "hls";
+    if (clean.endsWith(".ts")   || clean.includes(".ts"))   return "mpegts";
+    return "hls";   // افتراضي
+  }
+
   function startPlay() {
     if (!streamUrl) { showError(); return; }
+    destroyAll();
 
-    // تنظيف أي instance سابق
-    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-    video.src = "";
+    const type = detectStreamType(streamUrl);
 
+    if (type === "mpegts") {
+      playMpegts();
+    } else {
+      playHls();
+    }
+  }
+
+  // ===== بث MPEG-TS خام (.ts) — يُستخدم في باقات IPTV من نوع Xtream Codes =====
+  function playMpegts() {
+    if (typeof mpegts === "undefined" || !mpegts.isSupported()) {
+      // لا يدعمه المتصفح (Media Source Extensions غير متاحة) — جرّب HLS كحل أخير
+      playHls();
+      return;
+    }
+
+    mpegtsInstance = mpegts.createPlayer(
+      { type: "mse", isLive: true, url: streamUrl },
+      {
+        enableWorker: true,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3.0,
+        liveBufferLatencyMinRemain: 0.5,
+      }
+    );
+    mpegtsInstance.attachMediaElement(video);
+
+    let started = false;
+    mpegtsInstance.on(mpegts.Events.MEDIA_INFO, () => {
+      if (started) return;
+      started = true;
+      hideLoading();
+      addSubtitle();
+      video.play().catch(() => hideLoading());
+    });
+
+    let retried = false;
+    mpegtsInstance.on(mpegts.Events.ERROR, () => {
+      if (!retried) {
+        retried = true;
+        try {
+          destroyAll();
+          playHls();   // جرّب hls.js كنوع بديل (احتياط: قد يكون الرابط m3u8 رغم الامتداد)
+          return;
+        } catch (e) {}
+      }
+      showError();
+    });
+
+    try {
+      mpegtsInstance.load();
+      mpegtsInstance.play();
+    } catch (e) {
+      showError();
+    }
+
+    // مهلة أمان: إن لم يبدأ التشغيل خلال 12 ثانية أظهر الخطأ
+    setTimeout(() => { if (!started && loading.style.display !== "none") showError(); }, 12000);
+  }
+
+  // ===== بث HLS عادي (.m3u8) =====
+  function playHls() {
     if (Hls.isSupported()) {
       hlsInstance = new Hls({
         enableWorker: true,
@@ -215,7 +296,7 @@
 
   function tryNative() {
     // محاولة أخيرة: src مباشر
-    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    destroyAll();
     video.src = streamUrl;
     video.load();
     const onOk  = () => { hideLoading(); video.play().catch(()=>{}); };
